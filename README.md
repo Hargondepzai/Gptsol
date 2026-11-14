@@ -40,3 +40,12 @@ Làm theo hướng dẫn trên màn hình, chọn project mới, deploy xong l�
   mỗi lần gọi API nó được gửi kèm theo request tới máy chủ Vercel của chính bạn,
   máy chủ chỉ chuyển tiếp sang Xingchi/OpenAI, không lưu key vào đâu cả.
 - Đừng chia sẻ link có kèm key, đừng chụp ảnh màn hình có hiện key.
+
+## Lỗi "An error occurred..." / "is not valid JSON" — đã sửa ở bản này
+Bản trước: khi máy chủ Vercel trả về lỗi dạng chữ thường (ví dụ hết thời gian chờ
+khi AI viết tài liệu dài), trình duyệt cố đọc nó thành JSON nên báo
+`Unexpected token 'A', "An error o..." is not valid JSON`.
+Bản này: trình duyệt đọc lỗi dạng chữ và hiện đúng nội dung lỗi ra, máy chủ cũng
+luôn trả JSON. Nếu vẫn thấy lỗi hết thời gian chờ, đó là giới hạn gói Vercel
+miễn phí (hàm serverless chỉ chạy ~10 giây): hãy nhờ AI viết tài liệu ngắn hơn
+hoặc chia thành từng phần nhỏ rồi gửi tiếp.

@@ -5,7 +5,8 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Only POST' });
   try {
     const apiKey = req.headers['x-api-key'];
-    const { baseUrl, model, wireApi, messages, system, temperature } = req.body || {};
+    const bodyObj = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    const { baseUrl, model, wireApi, messages, system, temperature } = bodyObj;
     if (!apiKey) return res.status(400).json({ error: 'Thiếu API key. Dán key vào Cài đặt trước.' });
     if (!baseUrl || !model) return res.status(400).json({ error: 'Thiếu Base URL hoặc model.' });
     const base = String(baseUrl).replace(/\/+$/, '');
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
       return res.status(r.status).json({ error: msg });
     }
     let data;
-    try { data = JSON.parse(text); } catch { return res.status(502).json({ error: 'Máy chủ trả về dữ liệu không phải JSON.' }); }
+    try { data = JSON.parse(text); } catch { return res.status(502).json({ error: 'Nhà cung cấp trả về dữ liệu không phải JSON: ' + text.slice(0, 300) }); }
 
     let reply = '';
     if (wireApi === 'responses') {

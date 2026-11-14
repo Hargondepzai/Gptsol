@@ -90,6 +90,11 @@ img.generated,video.generated{max-width:100%;border-radius:12px;margin-top:8px}
 </main>
 <script>
 const $ = id => document.getElementById(id);
+async function readJson(res){
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch(e){ throw new Error(text.slice(0,300) || ('Lỗi máy chủ '+res.status)); }
+}
 const PRESETS = {
   xingchi: { baseUrl: 'https://api.xingchiapi.com/v1', wireApi: 'responses', model: 'gpt-6.1-sol', imageModel: 'gpt-image-1', videoModel: 'sora-2' },
   openai: { baseUrl: 'https://api.openai.com/v1', wireApi: 'chat', model: 'gpt-4o-mini', imageModel: 'gpt-image-1', videoModel: 'sora-2' },
@@ -124,7 +129,7 @@ $('testBtn').onclick = async ()=>{
   const s=settings(); if(!s.apiKey){ $('testResult').textContent='Chưa có key — dán key vào trước.'; return; }
   $('testResult').textContent='Đang kiểm tra...';
   try{ const r=await fetch('/api/test?baseUrl='+encodeURIComponent(s.baseUrl), { headers:{ 'x-api-key': s.apiKey } });
-    const j=await r.json(); $('testResult').textContent = r.ok ? ('Kết nối OK. Model có: '+(j.models||[]).slice(0,5).join(', ')) : ('Lỗi: '+(j.error||r.status)); }
+    const j=await readJson(r); $('testResult').textContent = r.ok ? ('Kết nối OK. Model có: '+(j.models||[]).slice(0,5).join(', ')) : ('Lỗi: '+(j.error||r.status)); }
   catch(e){ $('testResult').textContent='Lỗi mạng: '+e.message; }
 };
 document.querySelectorAll('#modes button').forEach(b=>{ b.onclick=()=>{ mode=b.dataset.mode; document.querySelectorAll('#modes button').forEach(x=>x.classList.add('secondary')); b.classList.remove('secondary'); $('modeHint').textContent=MODE_HINTS[mode]; $('input').placeholder = mode==='image' ? 'Mô tả ảnh...' : mode==='video' ? 'Mô tả video...' : mode==='file' ? 'Mô tả file cần tạo...' : mode==='doc' ? 'Mô tả tài liệu cần soạn...' : 'Nhắn tin cho AI...'; }; });
@@ -142,7 +147,7 @@ async function callChat(extraSystem, userText){
   const s=settings();
   const msgs = [...messages, {role:'user', content:userText}];
   const r=await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.model, wireApi:s.wireApi, messages:msgs, system:(s.system+'\n'+extraSystem), temperature:0.7 }) });
-  const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
+  const j=await readJson(r); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
   if (j.usage) updateTokens(j.usage); else { totalTokens += estimateTokens(userText)+estimateTokens(j.reply); turns++; $('tokenText').textContent = totalTokens.toLocaleString('vi-VN')+' / 1.000.000 token — đã dùng '+totalTokens.toLocaleString('vi-VN')+' token (ước tính), '+turns+' lượt'; $('tokenFill').style.width=Math.min(100,totalTokens/TOKEN_LIMIT*100)+'%'; }
   return j.reply;
 }
@@ -154,12 +159,12 @@ async function send(){
     if(mode==='image'){
       addMsg('user', '🎨 Tạo ảnh: '+text);
       const r=await fetch('/api/image', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.imageModel, prompt:text }) });
-      const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
+      const j=await readJson(r); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
       const d=document.createElement('div'); d.className='msg ai'; d.innerHTML='<div class="who">AI — ảnh</div><img class="generated" src="'+j.image+'">'; $('history').appendChild(d);
     } else if(mode==='video'){
       addMsg('user', '🎬 Tạo video: '+text);
       const r=await fetch('/api/video', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.videoModel, prompt:text }) });
-      const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
+      const j=await readJson(r); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
       if(j.url){ const d=document.createElement('div'); d.className='msg ai'; d.innerHTML='<div class="who">AI — video</div><video class="generated" controls src="'+j.url+'"></video>'; $('history').appendChild(d); }
       else addMsg('assistant', 'Video đang xử lý, mã job: '+(j.id||'không rõ')+' — trạng thái: '+(j.status||'')+'. Nhà cung cấp chưa trả link video ngay, bạn thử lại sau.');
     } else if(mode==='file'){
