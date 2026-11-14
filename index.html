@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Chat — Xingchi</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0f1115;color:#e8eaf0}
+header{display:flex;gap:12px;align-items:center;padding:14px 18px;background:#171a21;border-bottom:1px solid #262b36;position:sticky;top:0}
+header h1{font-size:18px;margin:0} header p{margin:2px 0 0;color:#9aa3b2;font-size:12px}
+main{max-width:860px;margin:0 auto;padding:18px}
+.card{background:#171a21;border:1px solid #262b36;border-radius:14px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:13px;color:#9aa3b2;margin:10px 0 4px}
+input,select,textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2c3340;background:#0f1115;color:#e8eaf0;font-size:15px}
+textarea{min-height:90px;resize:vertical}
+button{padding:10px 16px;border:0;border-radius:10px;background:#2dd4a7;color:#06281e;font-weight:700;cursor:pointer;font-size:15px}
+button.secondary{background:#262b36;color:#e8eaf0} button:disabled{opacity:.5;cursor:not-allowed}
+.tabs{display:flex;gap:8px;margin-bottom:12px} .tabs button{flex:1}
+.msg{padding:12px 14px;border-radius:12px;margin:10px 0;white-space:pre-wrap;line-height:1.55}
+.msg.user{background:#1e2a3a} .msg.ai{background:#171a21;border:1px solid #262b36}
+.msg .who{font-size:12px;color:#9aa3b2;margin-bottom:6px}
+.err{background:#3a1d1d;border:1px solid #7a2e2e;color:#ffb4b4;padding:12px;border-radius:12px;white-space:pre-wrap}
+img.generated{max-width:100%;border-radius:12px;margin-top:8px}
+.small{font-size:13px;color:#9aa3b2;line-height:1.5}
+.row{display:flex;gap:10px;flex-wrap:wrap} .row>*{flex:1;min-width:180px}
+</style>
+</head>
+<body>
+<header><div><h1>💬 AI Chat</h1><p>Chat + tạo ảnh bằng key của bạn — key chỉ lưu trong trình duyệt của bạn, máy chủ chỉ chuyển tiếp, không lưu key.</p></div></header>
+<main>
+  <div class="card">
+    <div class="row">
+      <div><label>Nhà cung cấp</label>
+        <select id="preset">
+          <option value="xingchi" selected>Xingchi (api.xingchiapi.com) — gpt-6.1-sol</option>
+          <option value="openai">OpenAI (api.openai.com)</option>
+          <option value="custom">Tùy chỉnh</option>
+        </select></div>
+      <div><label>Base URL</label><input id="baseUrl" value="https://api.xingchiapi.com/v1"></div>
+    </div>
+    <div class="row">
+      <div><label>Kiểu API (wire_api)</label>
+        <select id="wireApi"><option value="responses" selected>Responses</option><option value="chat">Chat Completions</option></select></div>
+      <div><label>Model chat</label><input id="model" value="gpt-6.1-sol"></div>
+      <div><label>Model tạo ảnh</label><input id="imageModel" value="gpt-image-1"></div>
+    </div>
+    <label>API key của bạn (dán key MỚI — key cũ đã lộ thì xóa đi tạo key mới)</label>
+    <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+    <label>System prompt (tùy chọn)</label>
+    <input id="system" value="Bạn là trợ lý AI thân thiện, trả lời bằng tiếng Việt, ngắn gọn và dễ hiểu.">
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <button id="testBtn" class="secondary">Kiểm tra kết nối</button>
+      <button id="saveBtn" class="secondary">Lưu cài đặt vào trình duyệt</button>
+      <span id="testResult" class="small" style="align-self:center"></span>
+    </div>
+    <p class="small">Lưu ý: Xingchi chặn gọi trực tiếp từ trình duyệt (CORS), nên trang này gọi qua <code>/api/chat</code> trên Vercel — máy chủ Vercel gọi hộ tới Xingchi, trình duyệt của bạn không gọi thẳng nữa.</p>
+  </div>
+
+  <div class="tabs">
+    <button id="tabChat">💬 Chat</button>
+    <button id="tabImage" class="secondary">🎨 Tạo ảnh</button>
+  </div>
+
+  <div class="card" id="chatPane">
+    <div id="history"></div>
+    <textarea id="input" placeholder="Nhắn tin cho AI... (Enter để gửi)"></textarea>
+    <div style="display:flex;gap:10px;margin-top:10px"><button id="sendBtn">Gửi ↑</button><button id="clearBtn" class="secondary">Đoạn chat mới</button></div>
+  </div>
+
+  <div class="card" id="imagePane" style="display:none">
+    <label>Mô tả ảnh (tiếng Anh cho đẹp hơn)</label>
+    <textarea id="imgPrompt" placeholder="Ví dụ: a cute anime girl in a white and pink idol dress, starry eyes..."></textarea>
+    <div style="display:flex;gap:10px;margin-top:10px"><button id="imgBtn">Tạo ảnh</button></div>
+    <div id="imgResult" style="margin-top:12px"></div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const PRESETS = {
+  xingchi: { baseUrl: 'https://api.xingchiapi.com/v1', wireApi: 'responses', model: 'gpt-6.1-sol', imageModel: 'gpt-image-1' },
+  openai: { baseUrl: 'https://api.openai.com/v1', wireApi: 'chat', model: 'gpt-4o-mini', imageModel: 'gpt-image-1' },
+  custom: null
+};
+let messages = [];
+function loadSaved(){ try{ const s = JSON.parse(localStorage.getItem('ai-chat-settings')||'null'); if(s){ $('preset').value=s.preset||'xingchi'; $('baseUrl').value=s.baseUrl||''; $('wireApi').value=s.wireApi||'responses'; $('model').value=s.model||''; $('imageModel').value=s.imageModel||''; $('system').value=s.system||''; $('apiKey').value=s.apiKey||''; } }catch(e){} }
+function settings(){ return { preset:$('preset').value, baseUrl:$('baseUrl').value.trim(), wireApi:$('wireApi').value, model:$('model').value.trim(), imageModel:$('imageModel').value.trim(), system:$('system').value, apiKey:$('apiKey').value.trim() }; }
+$('preset').addEventListener('change', ()=>{ const p=PRESETS[$('preset').value]; if(p){ $('baseUrl').value=p.baseUrl; $('wireApi').value=p.wireApi; $('model').value=p.model; $('imageModel').value=p.imageModel; } });
+$('saveBtn').onclick = ()=>{ localStorage.setItem('ai-chat-settings', JSON.stringify(settings())); $('testResult').textContent='Đã lưu vào trình duyệt này.'; };
+$('testBtn').onclick = async ()=>{
+  const s=settings(); if(!s.apiKey){ $('testResult').textContent='Chưa có key — dán key vào trước.'; return; }
+  $('testResult').textContent='Đang kiểm tra...';
+  try{ const r=await fetch('/api/test?baseUrl='+encodeURIComponent(s.baseUrl), { headers:{ 'x-api-key': s.apiKey } });
+    const j=await r.json(); $('testResult').textContent = r.ok ? ('Kết nối OK. Model có: '+(j.models||[]).slice(0,5).join(', ')) : ('Lỗi: '+(j.error||r.status)); }
+  catch(e){ $('testResult').textContent='Lỗi mạng: '+e.message; }
+};
+function addMsg(role, text){ const d=document.createElement('div'); d.className='msg '+(role==='user'?'user':'ai'); d.innerHTML='<div class="who">'+(role==='user'?'Bạn':'AI — '+settings().model)+'</div>'; d.appendChild(document.createTextNode(text)); $('history').appendChild(d); d.scrollIntoView(); }
+function addErr(text){ const d=document.createElement('div'); d.className='err'; d.textContent=text; $('history').appendChild(d); }
+async function send(){
+  const s=settings(); const text=$('input').value.trim(); if(!text) return;
+  if(!s.apiKey){ alert('Chưa có key — dán key vào ô API key ở trên trước.'); return; }
+  $('input').value=''; messages.push({role:'user', content:text}); addMsg('user', text);
+  $('sendBtn').disabled=true;
+  try{ const r=await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.model, wireApi:s.wireApi, messages, system:s.system, temperature:0.7 }) });
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
+    messages.push({role:'assistant', content:j.reply}); addMsg('assistant', j.reply);
+  }catch(e){ addErr('Không gửi được: '+e.message); }
+  $('sendBtn').disabled=false;
+}
+$('sendBtn').onclick=send;
+$('input').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } });
+$('clearBtn').onclick=()=>{ messages=[]; $('history').innerHTML=''; };
+$('tabChat').onclick=()=>{ $('chatPane').style.display=''; $('imagePane').style.display='none'; $('tabChat').classList.remove('secondary'); $('tabImage').classList.add('secondary'); };
+$('tabImage').onclick=()=>{ $('imagePane').style.display=''; $('chatPane').style.display='none'; $('tabImage').classList.remove('secondary'); $('tabChat').classList.add('secondary'); };
+$('imgBtn').onclick=async ()=>{
+  const s=settings(); const prompt=$('imgPrompt').value.trim(); if(!prompt){ alert('Nhập mô tả ảnh trước.'); return; }
+  if(!s.apiKey){ alert('Chưa có key — dán key vào ô API key ở trên trước.'); return; }
+  $('imgResult').innerHTML='<p class="small">Đang tạo ảnh, đợi một tí...</p>';
+  try{ const r=await fetch('/api/image', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.imageModel, prompt }) });
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
+    $('imgResult').innerHTML='<img class="generated" src="'+j.image+'" alt="Ảnh AI tạo">'; }
+  catch(e){ $('imgResult').innerHTML='<div class="err">Không tạo được ảnh: '+e.message+'</div>'; }
+};
+loadSaved();
+</script>
+</body>
+</html>
