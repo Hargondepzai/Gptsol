@@ -24,14 +24,15 @@ export default async function handler(req, res) {
         instructions: system || undefined,
         input,
         temperature: typeof temperature === 'number' ? temperature : 0.7,
-        store: false
+        store: false,
+        max_output_tokens: 800
       };
     } else {
       url = base + '/chat/completions';
       const msgs = [];
       if (system) msgs.push({ role: 'system', content: system });
       (messages || []).forEach(m => msgs.push({ role: m.role, content: m.content }));
-      body = { model, messages: msgs, temperature: typeof temperature === 'number' ? temperature : 0.7 };
+      body = { model, messages: msgs, temperature: typeof temperature === 'number' ? temperature : 0.7, max_tokens: 800 };
     }
 
     const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey };

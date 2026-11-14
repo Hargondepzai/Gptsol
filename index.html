@@ -167,18 +167,29 @@ async function send(){
       const j=await readJson(r); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
       if(j.url){ const d=document.createElement('div'); d.className='msg ai'; d.innerHTML='<div class="who">AI — video</div><video class="generated" controls src="'+j.url+'"></video>'; $('history').appendChild(d); }
       else addMsg('assistant', 'Video đang xử lý, mã job: '+(j.id||'không rõ')+' — trạng thái: '+(j.status||'')+'. Nhà cung cấp chưa trả link video ngay, bạn thử lại sau.');
-    } else if(mode==='file'){
-      addMsg('user', '📄 Tạo file: '+text);
-      const reply=await callChat('Bạn hãy viết toàn bộ nội dung file, chỉ trả về nội dung file, không giải thích thêm.', text);
-      const ext = /html/i.test(text) ? 'html' : /python|\.py/i.test(text) ? 'py' : /javascript|\.js/i.test(text) ? 'js' : 'txt';
-      const clean = reply.replace(/^```[a-z]*\n/i,'').replace(/```$/,'');
-      showFileCard('📄 File đã tạo', clean, 'ai-file.'+ext); addMsg('assistant', 'Xong file rồi, bạn bấm Tải xuống ở thẻ file bên dưới nha.');
-      messages.push({role:'user',content:text},{role:'assistant',content:reply});
-    } else if(mode==='doc'){
-      addMsg('user', '📝 Tài liệu: '+text);
-      const reply=await callChat('Bạn hãy soạn tài liệu hoàn chỉnh dạng Markdown, đầy đủ tiêu đề và nội dung.', text);
-      showFileCard('📝 Tài liệu đã soạn', reply, 'ai-tai-lieu.md'); addMsg('assistant', 'Xong tài liệu rồi, bạn bấm Tải xuống ở thẻ bên dưới nha.');
-      messages.push({role:'user',content:text},{role:'assistant',content:reply});
+    } else if(mode==='file' || mode==='doc'){
+      const isDoc = mode==='doc';
+      addMsg('user', (isDoc?'📝 Tài liệu: ':'📄 Tạo file: ')+text);
+      addMsg('assistant', 'Đang viết từng phần nhỏ để không bị quá 10 giây... (bước 1: lập dàn ý)');
+      // Bước 1: dàn ý ngắn — gọi nhanh, mỗi lần gọi chỉ trả về vài dòng
+      const outline = await callChat('Chỉ liệt kê dàn ý, mỗi mục một dòng, tối đa 5 mục, không viết nội dung chi tiết.', text);
+      const sections = outline.split('\n').map(s=>s.replace(/^#+\s*|^\d+[.)]\s*|^[-*]\s*/,'').trim()).filter(s=>s.length>2).slice(0,5);
+      let full = isDoc ? ('# '+text+'\n\n') : '';
+      if(sections.length===0){
+        const reply=await callChat(isDoc?'Soạn tài liệu dạng Markdown, ngắn gọn khoảng 400 chữ.':'Viết nội dung file, chỉ trả về nội dung file, khoảng 400 chữ.', text);
+        full += reply;
+      } else {
+        for(let i=0;i<sections.length;i++){
+          addMsg('assistant', 'Đang viết phần '+(i+1)+'/'+sections.length+': '+sections[i]);
+          const part=await callChat('Viết riêng phần "'+sections[i]+'" cho yêu cầu: '+text+'. Chỉ viết nội dung phần này, ngắn gọn khoảng 250-350 chữ, không viết lại các phần khác.', text);
+          full += (isDoc ? ('## '+sections[i]+'\n\n') : ('// '+sections[i]+'\n')) + part + '\n\n';
+        }
+      }
+      const clean = full.replace(/^```[a-z]*\n/i,'').replace(/```$/,'');
+      if(isDoc){ showFileCard('📝 Tài liệu đã soạn', clean, 'ai-tai-lieu.md'); }
+      else { const ext = /html/i.test(text) ? 'html' : /python|\.py/i.test(text) ? 'py' : /javascript|\.js/i.test(text) ? 'js' : 'txt'; showFileCard('📄 File đã tạo', clean, 'ai-file.'+ext); }
+      addMsg('assistant', 'Xong rồi, viết thành '+sections.length+' phần nhỏ ghép lại, bạn bấm Tải xuống ở thẻ bên dưới nha.');
+      messages.push({role:'user',content:text},{role:'assistant',content:full});
     } else {
       messages.push({role:'user', content:text}); addMsg('user', text);
       const reply=await callChat('', text);
