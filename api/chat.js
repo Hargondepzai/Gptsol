@@ -64,7 +64,8 @@ export default async function handler(req, res) {
     } else {
       reply = data.choices?.[0]?.message?.content || '';
     }
-    return res.status(200).json({ reply });
+    const usage = data.usage || null;
+    return res.status(200).json({ reply, usage });
   } catch (e) {
     return res.status(500).json({ error: 'Không gọi được tới nhà cung cấp: ' + (e.message || e) });
   }

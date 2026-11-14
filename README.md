@@ -5,9 +5,11 @@ Trang gọi qua `/api/*` trên Vercel — máy chủ Vercel gọi hộ tới nh�
 nên trình duyệt không bị chặn CORS như khi gọi thẳng.
 
 ## Cấu trúc
-- `index.html` — giao diện chat + tạo ảnh, cài đặt lưu trong trình duyệt (localStorage)
-- `api/chat.js` — proxy chat: Responses API (Xingchi, `gpt-6.1-sol`) hoặc Chat Completions
+- `index.html` — giao diện 1 đoạn chat với 5 chế độ: Chat, Tạo file, Tài liệu, Tạo ảnh, Tạo video;
+  có thanh token 🧮 trên trần 1.000.000 token (số liệu từ usage nhà cung cấp, thiếu thì ước tính theo độ dài chữ)
+- `api/chat.js` — proxy chat: Responses API (Xingchi, `gpt-6.1-sol`) hoặc Chat Completions, trả về cả `usage`
 - `api/image.js` — proxy tạo ảnh (`/images/generations`)
+- `api/video.js` — proxy tạo video (`/videos`, kiểu Sora — nhà cung cấp không có model video thì báo lỗi rõ, không giả video)
 - `api/test.js` — kiểm tra key + Base URL bằng `GET /models`
 - `vercel.json`, `package.json`
 

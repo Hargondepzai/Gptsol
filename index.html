@@ -15,18 +15,22 @@ input,select,textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px
 textarea{min-height:90px;resize:vertical}
 button{padding:10px 16px;border:0;border-radius:10px;background:#2dd4a7;color:#06281e;font-weight:700;cursor:pointer;font-size:15px}
 button.secondary{background:#262b36;color:#e8eaf0} button:disabled{opacity:.5;cursor:not-allowed}
-.tabs{display:flex;gap:8px;margin-bottom:12px} .tabs button{flex:1}
+.modes{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap} .modes button{flex:1;min-width:110px}
 .msg{padding:12px 14px;border-radius:12px;margin:10px 0;white-space:pre-wrap;line-height:1.55}
 .msg.user{background:#1e2a3a} .msg.ai{background:#171a21;border:1px solid #262b36}
 .msg .who{font-size:12px;color:#9aa3b2;margin-bottom:6px}
 .err{background:#3a1d1d;border:1px solid #7a2e2e;color:#ffb4b4;padding:12px;border-radius:12px;white-space:pre-wrap}
-img.generated{max-width:100%;border-radius:12px;margin-top:8px}
+img.generated,video.generated{max-width:100%;border-radius:12px;margin-top:8px}
 .small{font-size:13px;color:#9aa3b2;line-height:1.5}
 .row{display:flex;gap:10px;flex-wrap:wrap} .row>*{flex:1;min-width:180px}
+.tokenbar{height:10px;background:#262b36;border-radius:99px;overflow:hidden;margin-top:6px}
+.tokenbar>div{height:100%;background:#2dd4a7;width:0%}
+.filecard{border:1px solid #2c3340;border-radius:12px;padding:12px;margin-top:10px;background:#0f1115}
+.filecard pre{white-space:pre-wrap;max-height:300px;overflow:auto;font-size:13px}
 </style>
 </head>
 <body>
-<header><div><h1>💬 AI Chat</h1><p>Chat + tạo ảnh bằng key của bạn — key chỉ lưu trong trình duyệt của bạn, máy chủ chỉ chuyển tiếp, không lưu key.</p></div></header>
+<header><div><h1>💬 AI Chat</h1><p>Chat + tạo file / tài liệu / ảnh / video bằng key của bạn — key chỉ lưu trong trình duyệt của bạn, máy chủ chỉ chuyển tiếp, không lưu key.</p></div></header>
 <main>
   <div class="card">
     <div class="row">
@@ -43,6 +47,7 @@ img.generated{max-width:100%;border-radius:12px;margin-top:8px}
         <select id="wireApi"><option value="responses" selected>Responses</option><option value="chat">Chat Completions</option></select></div>
       <div><label>Model chat</label><input id="model" value="gpt-6.1-sol"></div>
       <div><label>Model tạo ảnh</label><input id="imageModel" value="gpt-image-1"></div>
+      <div><label>Model video</label><input id="videoModel" value="sora-2"></div>
     </div>
     <label>API key của bạn (dán key MỚI — key cũ đã lộ thì xóa đi tạo key mới)</label>
     <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off">
@@ -53,38 +58,67 @@ img.generated{max-width:100%;border-radius:12px;margin-top:8px}
       <button id="saveBtn" class="secondary">Lưu cài đặt vào trình duyệt</button>
       <span id="testResult" class="small" style="align-self:center"></span>
     </div>
-    <p class="small">Lưu ý: Xingchi chặn gọi trực tiếp từ trình duyệt (CORS), nên trang này gọi qua <code>/api/chat</code> trên Vercel — máy chủ Vercel gọi hộ tới Xingchi, trình duyệt của bạn không gọi thẳng nữa.</p>
   </div>
 
-  <div class="tabs">
-    <button id="tabChat">💬 Chat</button>
-    <button id="tabImage" class="secondary">🎨 Tạo ảnh</button>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <b>🧮 Token</b><span id="tokenText" class="small">0 / 1.000.000 token — đã dùng 0 token, 0 lượt</span>
+    </div>
+    <div class="tokenbar"><div id="tokenFill"></div></div>
+    <p class="small">Số token lấy từ nhà cung cấp trả về sau mỗi lượt (usage). Nếu nhà cung cấp không trả usage thì ước tính theo độ dài chữ.</p>
   </div>
 
-  <div class="card" id="chatPane">
+  <div class="modes" id="modes">
+    <button data-mode="chat">💬 Chat</button>
+    <button data-mode="file" class="secondary">📄 Tạo file</button>
+    <button data-mode="doc" class="secondary">📝 Tài liệu</button>
+    <button data-mode="image" class="secondary">🎨 Tạo ảnh</button>
+    <button data-mode="video" class="secondary">🎬 Tạo video</button>
+  </div>
+
+  <div class="card">
     <div id="history"></div>
+    <label id="inputLabel">Nhắn tin cho AI...</label>
     <textarea id="input" placeholder="Nhắn tin cho AI... (Enter để gửi)"></textarea>
-    <div style="display:flex;gap:10px;margin-top:10px"><button id="sendBtn">Gửi ↑</button><button id="clearBtn" class="secondary">Đoạn chat mới</button></div>
-  </div>
-
-  <div class="card" id="imagePane" style="display:none">
-    <label>Mô tả ảnh (tiếng Anh cho đẹp hơn)</label>
-    <textarea id="imgPrompt" placeholder="Ví dụ: a cute anime girl in a white and pink idol dress, starry eyes..."></textarea>
-    <div style="display:flex;gap:10px;margin-top:10px"><button id="imgBtn">Tạo ảnh</button></div>
-    <div id="imgResult" style="margin-top:12px"></div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <button id="sendBtn">Gửi ↑</button>
+      <button id="clearBtn" class="secondary">Đoạn chat mới</button>
+      <span id="modeHint" class="small" style="align-self:center">Chế độ Chat: hỏi đáp bình thường.</span>
+    </div>
+    <div id="output"></div>
   </div>
 </main>
 <script>
 const $ = id => document.getElementById(id);
 const PRESETS = {
-  xingchi: { baseUrl: 'https://api.xingchiapi.com/v1', wireApi: 'responses', model: 'gpt-6.1-sol', imageModel: 'gpt-image-1' },
-  openai: { baseUrl: 'https://api.openai.com/v1', wireApi: 'chat', model: 'gpt-4o-mini', imageModel: 'gpt-image-1' },
+  xingchi: { baseUrl: 'https://api.xingchiapi.com/v1', wireApi: 'responses', model: 'gpt-6.1-sol', imageModel: 'gpt-image-1', videoModel: 'sora-2' },
+  openai: { baseUrl: 'https://api.openai.com/v1', wireApi: 'chat', model: 'gpt-4o-mini', imageModel: 'gpt-image-1', videoModel: 'sora-2' },
   custom: null
 };
 let messages = [];
-function loadSaved(){ try{ const s = JSON.parse(localStorage.getItem('ai-chat-settings')||'null'); if(s){ $('preset').value=s.preset||'xingchi'; $('baseUrl').value=s.baseUrl||''; $('wireApi').value=s.wireApi||'responses'; $('model').value=s.model||''; $('imageModel').value=s.imageModel||''; $('system').value=s.system||''; $('apiKey').value=s.apiKey||''; } }catch(e){} }
-function settings(){ return { preset:$('preset').value, baseUrl:$('baseUrl').value.trim(), wireApi:$('wireApi').value, model:$('model').value.trim(), imageModel:$('imageModel').value.trim(), system:$('system').value, apiKey:$('apiKey').value.trim() }; }
-$('preset').addEventListener('change', ()=>{ const p=PRESETS[$('preset').value]; if(p){ $('baseUrl').value=p.baseUrl; $('wireApi').value=p.wireApi; $('model').value=p.model; $('imageModel').value=p.imageModel; } });
+let mode = 'chat';
+let totalTokens = 0, turns = 0;
+const TOKEN_LIMIT = 1000000;
+const MODE_HINTS = {
+  chat: 'Chế độ Chat: hỏi đáp bình thường.',
+  file: 'Chế độ Tạo file: mô tả file cần làm (ví dụ: file HTML, file Python...), AI viết xong bạn tải về được.',
+  doc: 'Chế độ Tài liệu: mô tả tài liệu cần soạn, AI viết dạng Markdown, bạn tải về .md / .txt được.',
+  image: 'Chế độ Tạo ảnh: mô tả ảnh bằng tiếng Anh cho đẹp hơn.',
+  video: 'Chế độ Tạo video: mô tả video. Lưu ý: nhà cung cấp phải có model video (Sora) thì mới tạo được.'
+};
+function loadSaved(){ try{ const s = JSON.parse(localStorage.getItem('ai-chat-settings')||'null'); if(s){ $('preset').value=s.preset||'xingchi'; $('baseUrl').value=s.baseUrl||''; $('wireApi').value=s.wireApi||'responses'; $('model').value=s.model||''; $('imageModel').value=s.imageModel||''; $('videoModel').value=s.videoModel||'sora-2'; $('system').value=s.system||''; $('apiKey').value=s.apiKey||''; } }catch(e){} }
+function settings(){ return { preset:$('preset').value, baseUrl:$('baseUrl').value.trim(), wireApi:$('wireApi').value, model:$('model').value.trim(), imageModel:$('imageModel').value.trim(), videoModel:$('videoModel').value.trim(), system:$('system').value, apiKey:$('apiKey').value.trim() }; }
+function updateTokens(usage){
+  let n = 0;
+  if (usage && typeof usage.total_tokens === 'number') n = usage.total_tokens;
+  else if (usage && typeof usage.input_tokens === 'number') n = usage.input_tokens + (usage.output_tokens||0);
+  if (n > 0) totalTokens += n; else totalTokens += 0; // usage thiếu thì không cộng bừa
+  turns++;
+  $('tokenText').textContent = totalTokens.toLocaleString('vi-VN') + ' / 1.000.000 token — đã dùng ' + totalTokens.toLocaleString('vi-VN') + ' token, ' + turns + ' lượt';
+  $('tokenFill').style.width = Math.min(100, totalTokens/TOKEN_LIMIT*100) + '%';
+}
+function estimateTokens(text){ return Math.ceil((text||'').length/4); }
+$('preset').addEventListener('change', ()=>{ const p=PRESETS[$('preset').value]; if(p){ $('baseUrl').value=p.baseUrl; $('wireApi').value=p.wireApi; $('model').value=p.model; $('imageModel').value=p.imageModel; $('videoModel').value=p.videoModel; } });
 $('saveBtn').onclick = ()=>{ localStorage.setItem('ai-chat-settings', JSON.stringify(settings())); $('testResult').textContent='Đã lưu vào trình duyệt này.'; };
 $('testBtn').onclick = async ()=>{
   const s=settings(); if(!s.apiKey){ $('testResult').textContent='Chưa có key — dán key vào trước.'; return; }
@@ -93,33 +127,64 @@ $('testBtn').onclick = async ()=>{
     const j=await r.json(); $('testResult').textContent = r.ok ? ('Kết nối OK. Model có: '+(j.models||[]).slice(0,5).join(', ')) : ('Lỗi: '+(j.error||r.status)); }
   catch(e){ $('testResult').textContent='Lỗi mạng: '+e.message; }
 };
+document.querySelectorAll('#modes button').forEach(b=>{ b.onclick=()=>{ mode=b.dataset.mode; document.querySelectorAll('#modes button').forEach(x=>x.classList.add('secondary')); b.classList.remove('secondary'); $('modeHint').textContent=MODE_HINTS[mode]; $('input').placeholder = mode==='image' ? 'Mô tả ảnh...' : mode==='video' ? 'Mô tả video...' : mode==='file' ? 'Mô tả file cần tạo...' : mode==='doc' ? 'Mô tả tài liệu cần soạn...' : 'Nhắn tin cho AI...'; }; });
 function addMsg(role, text){ const d=document.createElement('div'); d.className='msg '+(role==='user'?'user':'ai'); d.innerHTML='<div class="who">'+(role==='user'?'Bạn':'AI — '+settings().model)+'</div>'; d.appendChild(document.createTextNode(text)); $('history').appendChild(d); d.scrollIntoView(); }
 function addErr(text){ const d=document.createElement('div'); d.className='err'; d.textContent=text; $('history').appendChild(d); }
+function download(name, text){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'})); a.download=name; a.click(); }
+function showFileCard(title, content, filename){
+  const d=document.createElement('div'); d.className='filecard';
+  d.innerHTML='<b>'+title+'</b><pre></pre><div style="display:flex;gap:8px;margin-top:8px"><button>Tải xuống</button></div>';
+  d.querySelector('pre').textContent=content;
+  d.querySelector('button').onclick=()=>download(filename, content);
+  $('output').appendChild(d); d.scrollIntoView();
+}
+async function callChat(extraSystem, userText){
+  const s=settings();
+  const msgs = [...messages, {role:'user', content:userText}];
+  const r=await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.model, wireApi:s.wireApi, messages:msgs, system:(s.system+'\n'+extraSystem), temperature:0.7 }) });
+  const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
+  if (j.usage) updateTokens(j.usage); else { totalTokens += estimateTokens(userText)+estimateTokens(j.reply); turns++; $('tokenText').textContent = totalTokens.toLocaleString('vi-VN')+' / 1.000.000 token — đã dùng '+totalTokens.toLocaleString('vi-VN')+' token (ước tính), '+turns+' lượt'; $('tokenFill').style.width=Math.min(100,totalTokens/TOKEN_LIMIT*100)+'%'; }
+  return j.reply;
+}
 async function send(){
   const s=settings(); const text=$('input').value.trim(); if(!text) return;
   if(!s.apiKey){ alert('Chưa có key — dán key vào ô API key ở trên trước.'); return; }
-  $('input').value=''; messages.push({role:'user', content:text}); addMsg('user', text);
-  $('sendBtn').disabled=true;
-  try{ const r=await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.model, wireApi:s.wireApi, messages, system:s.system, temperature:0.7 }) });
-    const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
-    messages.push({role:'assistant', content:j.reply}); addMsg('assistant', j.reply);
+  $('input').value=''; $('sendBtn').disabled=true;
+  try{
+    if(mode==='image'){
+      addMsg('user', '🎨 Tạo ảnh: '+text);
+      const r=await fetch('/api/image', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.imageModel, prompt:text }) });
+      const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
+      const d=document.createElement('div'); d.className='msg ai'; d.innerHTML='<div class="who">AI — ảnh</div><img class="generated" src="'+j.image+'">'; $('history').appendChild(d);
+    } else if(mode==='video'){
+      addMsg('user', '🎬 Tạo video: '+text);
+      const r=await fetch('/api/video', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.videoModel, prompt:text }) });
+      const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
+      if(j.url){ const d=document.createElement('div'); d.className='msg ai'; d.innerHTML='<div class="who">AI — video</div><video class="generated" controls src="'+j.url+'"></video>'; $('history').appendChild(d); }
+      else addMsg('assistant', 'Video đang xử lý, mã job: '+(j.id||'không rõ')+' — trạng thái: '+(j.status||'')+'. Nhà cung cấp chưa trả link video ngay, bạn thử lại sau.');
+    } else if(mode==='file'){
+      addMsg('user', '📄 Tạo file: '+text);
+      const reply=await callChat('Bạn hãy viết toàn bộ nội dung file, chỉ trả về nội dung file, không giải thích thêm.', text);
+      const ext = /html/i.test(text) ? 'html' : /python|\.py/i.test(text) ? 'py' : /javascript|\.js/i.test(text) ? 'js' : 'txt';
+      const clean = reply.replace(/^```[a-z]*\n/i,'').replace(/```$/,'');
+      showFileCard('📄 File đã tạo', clean, 'ai-file.'+ext); addMsg('assistant', 'Xong file rồi, bạn bấm Tải xuống ở thẻ file bên dưới nha.');
+      messages.push({role:'user',content:text},{role:'assistant',content:reply});
+    } else if(mode==='doc'){
+      addMsg('user', '📝 Tài liệu: '+text);
+      const reply=await callChat('Bạn hãy soạn tài liệu hoàn chỉnh dạng Markdown, đầy đủ tiêu đề và nội dung.', text);
+      showFileCard('📝 Tài liệu đã soạn', reply, 'ai-tai-lieu.md'); addMsg('assistant', 'Xong tài liệu rồi, bạn bấm Tải xuống ở thẻ bên dưới nha.');
+      messages.push({role:'user',content:text},{role:'assistant',content:reply});
+    } else {
+      messages.push({role:'user', content:text}); addMsg('user', text);
+      const reply=await callChat('', text);
+      messages.push({role:'assistant', content:reply}); addMsg('assistant', reply);
+    }
   }catch(e){ addErr('Không gửi được: '+e.message); }
   $('sendBtn').disabled=false;
 }
 $('sendBtn').onclick=send;
 $('input').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } });
-$('clearBtn').onclick=()=>{ messages=[]; $('history').innerHTML=''; };
-$('tabChat').onclick=()=>{ $('chatPane').style.display=''; $('imagePane').style.display='none'; $('tabChat').classList.remove('secondary'); $('tabImage').classList.add('secondary'); };
-$('tabImage').onclick=()=>{ $('imagePane').style.display=''; $('chatPane').style.display='none'; $('tabImage').classList.remove('secondary'); $('tabChat').classList.add('secondary'); };
-$('imgBtn').onclick=async ()=>{
-  const s=settings(); const prompt=$('imgPrompt').value.trim(); if(!prompt){ alert('Nhập mô tả ảnh trước.'); return; }
-  if(!s.apiKey){ alert('Chưa có key — dán key vào ô API key ở trên trước.'); return; }
-  $('imgResult').innerHTML='<p class="small">Đang tạo ảnh, đợi một tí...</p>';
-  try{ const r=await fetch('/api/image', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':s.apiKey}, body: JSON.stringify({ baseUrl:s.baseUrl, model:s.imageModel, prompt }) });
-    const j=await r.json(); if(!r.ok) throw new Error(j.error||('Lỗi '+r.status));
-    $('imgResult').innerHTML='<img class="generated" src="'+j.image+'" alt="Ảnh AI tạo">'; }
-  catch(e){ $('imgResult').innerHTML='<div class="err">Không tạo được ảnh: '+e.message+'</div>'; }
-};
+$('clearBtn').onclick=()=>{ messages=[]; $('history').innerHTML=''; $('output').innerHTML=''; };
 loadSaved();
 </script>
 </body>
